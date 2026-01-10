@@ -3,42 +3,40 @@
  * Serviciu centralizat pentru apelurile către backend API
  */
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 /**
  * Face un request către backend API
- * @param {string} endpoint - Endpoint-ul API (ex: "/shopify/integrations")
+ * @param {string} endpoint - Endpoint-ul API (ex: "/api/shopify/integrations")
  * @param {object} options - Opțiuni pentru fetch (method, body, etc.)
  */
 async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const defaultOptions = {
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
-    ...options
+    ...options,
   };
 
-  if (options.body && typeof options.body === 'object') {
+  if (options.body && typeof options.body === "object") {
     defaultOptions.body = JSON.stringify(options.body);
   }
 
   try {
     const response = await fetch(url, defaultOptions);
-    
-    // Verifică dacă răspunsul este JSON sau HTML
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      // Dacă nu este JSON, probabil serverul nu rulează sau returnează o pagină HTML
-      if (response.status === 404) {
-        throw new Error('Backend server nu rulează sau ruta API nu există. Verifică că serverul backend rulează pe portul 3001.');
-      }
+
+    // Verifică dacă răspunsul este JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
       const text = await response.text();
-      if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-        throw new Error('Backend server nu rulează sau ruta API nu există. Verifică că serverul backend rulează pe portul 3001. Dacă folosești Vite dev server, rulează și backend-ul separat: npm run dev:server');
+      if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+        throw new Error(
+          "Backend server nu rulează sau returnează HTML. Verifică că serverul backend rulează pe portul 4000."
+        );
       }
-      throw new Error(`Serverul a returnat un răspuns neașteptat (${contentType}). Verifică că backend-ul rulează corect.`);
+      throw new Error(`Serverul a returnat un răspuns neașteptat (${contentType})`);
     }
 
     const data = await response.json();
@@ -49,11 +47,7 @@ async function apiRequest(endpoint, options = {}) {
 
     return data;
   } catch (error) {
-    console.error('API Request Error:', error);
-    // Dacă eroarea este despre JSON parsing, oferă un mesaj mai clar
-    if (error.message.includes('Unexpected token') || error.message.includes('JSON')) {
-      throw new Error('Backend server nu rulează sau returnează HTML în loc de JSON. Verifică că serverul backend rulează pe portul 3001: npm run dev:server');
-    }
+    console.error("API Request Error:", error);
     throw error;
   }
 }
@@ -62,64 +56,91 @@ async function apiRequest(endpoint, options = {}) {
  * Shopify API endpoints
  */
 export const shopifyAPI = {
-  // Integrări
-  createIntegration: (data) => apiRequest('/shopify/integrations', {
-    method: 'POST',
-    body: data
-  }),
+  /**
+   * Obține toate integrările Shopify
+   * @returns {Promise<object>} Lista de integrări
+   */
+  getShopifyIntegrations: () => apiRequest("/api/shopify/integrations", { method: "GET" }),
 
-  getIntegrations: () => apiRequest('/shopify/integrations', {
-    method: 'GET'
-  }),
+  /**
+   * Creează o integrare Shopify nouă
+   * @param {object} payload - Datele integrării
+   * @param {string} payload.integrationName - Numele integrării (opțional)
+   * @param {string} payload.storeDomain - Domeniul magazinului (ex: "nume-magazin.myshopify.com")
+   * @param {string} payload.adminAccessToken - Admin API Access Token (shpat_... sau shpca_...)
+   * @returns {Promise<object>} Integrarea creată
+   */
+  createShopifyIntegration: (payload) =>
+    apiRequest("/api/shopify/integrations", {
+      method: "POST",
+      body: payload,
+    }),
 
-  getIntegration: (id) => apiRequest(`/shopify/integrations/${id}`, {
-    method: 'GET'
-  }),
+  /**
+   * Obține o integrare specifică
+   * @param {string} id - ID-ul integrării
+   * @returns {Promise<object>} Integrarea
+   */
+  getShopifyIntegration: (id) => apiRequest(`/api/shopify/integrations/${id}`, { method: "GET" }),
 
-  updateIntegration: (id, data) => apiRequest(`/shopify/integrations/${id}`, {
-    method: 'PUT',
-    body: data
-  }),
+  /**
+   * Actualizează o integrare
+   * @param {string} id - ID-ul integrării
+   * @param {object} payload - Datele actualizate
+   * @returns {Promise<object>} Integrarea actualizată
+   */
+  updateShopifyIntegration: (id, payload) =>
+    apiRequest(`/api/shopify/integrations/${id}`, {
+      method: "PUT",
+      body: payload,
+    }),
 
-  deleteIntegration: (id) => apiRequest(`/shopify/integrations/${id}`, {
-    method: 'DELETE'
-  }),
+  /**
+   * Șterge o integrare
+   * @param {string} id - ID-ul integrării
+   * @returns {Promise<object>} Răspuns
+   */
+  deleteShopifyIntegration: (id) =>
+    apiRequest(`/api/shopify/integrations/${id}`, {
+      method: "DELETE",
+    }),
 
-  testConnection: (id) => apiRequest(`/shopify/integrations/${id}/test`, {
-    method: 'POST'
-  }),
+  /**
+   * Testează conexiunea cu Shopify
+   * @param {string} id - ID-ul integrării
+   * @returns {Promise<object>} Rezultatul testului
+   */
+  testConnection: (id) =>
+    apiRequest(`/api/shopify/integrations/${id}/test`, {
+      method: "POST",
+    }),
 
+  /**
+   * Obține produsele din Shopify
+   * @param {string} id - ID-ul integrării
+   * @param {object} params - Parametri de paginare
+   * @returns {Promise<object>} Lista de produse
+   */
   getProducts: (id, params = {}) => {
     const queryParams = new URLSearchParams(params).toString();
-    const endpoint = `/shopify/integrations/${id}/products${queryParams ? `?${queryParams}` : ''}`;
-    return apiRequest(endpoint, {
-      method: 'GET'
-    });
+    const endpoint = `/api/shopify/integrations/${id}/products${queryParams ? `?${queryParams}` : ""}`;
+    return apiRequest(endpoint, { method: "GET" });
   },
 
-  createProduct: (integrationId, productData, shopifyId = null) => apiRequest(`/shopify/integrations/${integrationId}/products`, {
-    method: 'POST',
-    body: { productLocalData: productData, product: productData, shopifyId }
-  }),
-
-  updateProduct: (integrationId, productId, productData) => apiRequest(`/shopify/integrations/${integrationId}/products/${productId}`, {
-    method: 'PUT',
-    body: { product: productData }
-  }),
-
-  // Rute dedicate pentru sincronizare cu format local
-  syncProduct: (integrationId, productLocalData) => apiRequest(`/shopify/sync/${integrationId}`, {
-    method: 'POST',
-    body: { productLocalData }
-  }),
-
-  syncProductIntelligent: (integrationId, productLocalData) => apiRequest(`/shopify/sync/${integrationId}/intelligent`, {
-    method: 'POST',
-    body: { productLocalData }
-  })
+  /**
+   * Sincronizează un produs către Shopify
+   * @param {string} id - ID-ul integrării
+   * @param {object} productLocalData - Datele produsului
+   * @returns {Promise<object>} Rezultatul sincronizării
+   */
+  syncProduct: (id, productLocalData) =>
+    apiRequest(`/api/shopify/integrations/${id}/products`, {
+      method: "POST",
+      body: { productLocalData },
+    }),
 };
 
 // Health check
-export const healthCheck = () => apiRequest('/health', { method: 'GET' });
+export const healthCheck = () => apiRequest("/api/health", { method: "GET" });
 
 export default apiRequest;
