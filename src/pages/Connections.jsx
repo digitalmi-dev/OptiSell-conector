@@ -24,8 +24,7 @@ function Connections() {
   const [formData, setFormData] = useState({
     integrationName: "",
     storeDomain: "",
-    clientId: "",
-    clientSecret: "",
+    adminApiAccessToken: "",
   });
 
   useEffect(() => {
@@ -52,8 +51,7 @@ function Connections() {
     setFormData({
       integrationName: "",
       storeDomain: "",
-      clientId: "",
-      clientSecret: "",
+      adminApiAccessToken: "",
     });
     setTestResult(null);
     setIsModalOpen(true);
@@ -64,8 +62,7 @@ function Connections() {
     setFormData({
       integrationName: integration.integrationName || "",
       storeDomain: integration.storeDomain || "",
-      clientId: "",
-      clientSecret: "",
+      adminApiAccessToken: "",
     });
     setTestResult(null);
     setIsModalOpen(true);
@@ -82,48 +79,40 @@ function Connections() {
     const cleanDomain = formData.storeDomain.trim();
     if (!cleanDomain.includes(".myshopify.com")) {
       alert(
-        "Store Domain trebuie să conțină .myshopify.com\n\nExemplu: nume-magazin.myshopify.com"
+        "Store Domain trebuie să conțină .myshopify.com\n\nExemplu: optisell-4.myshopify.com"
       );
       return;
     }
 
-    if (!formData.clientId || !formData.clientId.trim()) {
-      alert("Client ID este obligatoriu!");
+    if (!formData.adminApiAccessToken || !formData.adminApiAccessToken.trim()) {
+      alert("Admin API Access Token este obligatoriu!");
       return;
     }
 
-    if (!formData.clientSecret || !formData.clientSecret.trim()) {
-      alert("Client Secret este obligatoriu!");
+    const cleanToken = formData.adminApiAccessToken.trim();
+    if (!cleanToken.startsWith("shpat_") && !cleanToken.startsWith("shpca_")) {
+      alert('Admin API Access Token trebuie să înceapă cu "shpat_" sau "shpca_"');
       return;
     }
 
     try {
       const payload = {
         storeDomain: cleanDomain,
-        clientId: formData.clientId.trim(),
-        clientSecret: formData.clientSecret.trim(),
+        adminApiAccessToken: cleanToken,
       };
 
       if (formData.integrationName && formData.integrationName.trim()) {
         payload.integrationName = formData.integrationName.trim();
       }
 
-      if (editingIntegration) {
-        const response = await shopifyAPI.updateShopifyIntegration(editingIntegration.id, payload);
+      const response = await shopifyAPI.createShopifyIntegration(payload);
 
-        if (response.success) {
-          alert("Integrarea a fost actualizată cu succes!");
-          setIsModalOpen(false);
-          loadIntegrations();
-        }
+      if (response.success) {
+        alert("Integrarea a fost creată cu succes!");
+        setIsModalOpen(false);
+        loadIntegrations();
       } else {
-        const response = await shopifyAPI.createShopifyIntegration(payload);
-
-        if (response.success) {
-          alert("Integrarea a fost creată cu succes!");
-          setIsModalOpen(false);
-          loadIntegrations();
-        }
+        alert(`Eroare: ${response.message || "Eroare necunoscută"}`);
       }
     } catch (error) {
       console.error("Error saving integration:", error);
@@ -174,6 +163,8 @@ function Connections() {
       if (response.success) {
         alert("Integrarea a fost ștearsă cu succes!");
         loadIntegrations();
+      } else {
+        alert(`Eroare: ${response.message || "Eroare necunoscută"}`);
       }
     } catch (error) {
       console.error("Error deleting integration:", error);
@@ -308,13 +299,6 @@ function Connections() {
                   </span>
                 </button>
                 <button
-                  onClick={() => handleEditIntegration(integration)}
-                  className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <FiEdit className="w-4 h-4 inline mr-1" />
-                  Editează
-                </button>
-                <button
                   onClick={() =>
                     handleDeleteIntegration(integration.id, integration.integrationName || integration.storeDomain)
                   }
@@ -342,7 +326,7 @@ function Connections() {
           setEditingIntegration(null);
           setTestResult(null);
         }}
-        title={editingIntegration ? "Editează Integrare Shopify" : "Adaugă Integrare Shopify"}
+        title="Adaugă Integrare Shopify"
         size="medium"
       >
         <form onSubmit={handleSaveIntegration} className="space-y-4">
@@ -374,7 +358,7 @@ function Connections() {
               onChange={(e) =>
                 setFormData({ ...formData, storeDomain: e.target.value })
               }
-              placeholder="nume-magazin.myshopify.com"
+              placeholder="optisell-4.myshopify.com"
               required
               className={`w-full px-2.5 py-1.5 text-sm border rounded focus:ring-1 focus:border-purple-500 ${
                 formData.storeDomain.trim() &&
@@ -391,58 +375,60 @@ function Connections() {
                 <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
                   <p className="font-semibold mb-1">⚠️ Format invalid!</p>
                   <p>Store Domain trebuie să conțină .myshopify.com</p>
-                  <p className="mt-1">Exemplu: nume-magazin.myshopify.com</p>
+                  <p className="mt-1">Exemplu: optisell-4.myshopify.com</p>
                 </div>
               )}
           </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              Client ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.clientId}
-              onChange={(e) =>
-                setFormData({ ...formData, clientId: e.target.value })
-              }
-              placeholder="Client ID de la Custom App"
-              required
-              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Client ID (API Key) de la Custom App în Shopify
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Client Secret <span className="text-red-500">*</span>
+              Admin API Access Token <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
-              value={formData.clientSecret}
+              value={formData.adminApiAccessToken}
               onChange={(e) =>
-                setFormData({ ...formData, clientSecret: e.target.value })
+                setFormData({ ...formData, adminApiAccessToken: e.target.value })
               }
-              placeholder="Client Secret de la Custom App"
+              placeholder="shpat_xxxxxxxxxxxxxxxxxxxxx"
               required
-              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+              className={`w-full px-2.5 py-1.5 text-sm border rounded focus:ring-1 focus:border-purple-500 ${
+                formData.adminApiAccessToken.trim() &&
+                !formData.adminApiAccessToken.trim().replace(/\s+/g, "").startsWith("shpat_") &&
+                !formData.adminApiAccessToken.trim().replace(/\s+/g, "").startsWith("shpca_")
+                  ? "border-red-300 bg-red-50 focus:ring-red-500"
+                  : "border-gray-300 focus:ring-purple-500"
+              }`}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Client Secret (API Secret) de la Custom App în Shopify
+              Admin API Access Token trebuie să înceapă cu <strong>shpat_</strong> (Private App) sau{" "}
+              <strong>shpca_</strong> (Custom App Admin API)
             </p>
-            {!editingIntegration && (
-              <a
-                href="https://help.shopify.com/en/manual/apps/app-types/custom-apps"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1 mt-2"
-              >
-                <span>Cum obțin Client ID și Client Secret?</span>
-                <FiExternalLink className="w-3 h-3" />
-              </a>
-            )}
+            {formData.adminApiAccessToken.trim() &&
+              !formData.adminApiAccessToken.trim().replace(/\s+/g, "").startsWith("shpat_") &&
+              !formData.adminApiAccessToken.trim().replace(/\s+/g, "").startsWith("shpca_") && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+                  <p className="font-semibold mb-1">⚠️ Token invalid detectat!</p>
+                  <p>
+                    Token-ul introdus începe cu "
+                    {formData.adminApiAccessToken.trim().substring(0, 5)}_" care este de tip
+                    invalid.
+                  </p>
+                  <p className="mt-1">
+                    Trebuie să folosești <strong>Admin API Access Token</strong> care începe cu
+                    "shpat_" sau "shpca_".
+                  </p>
+                </div>
+              )}
+            <a
+              href="https://help.shopify.com/en/manual/apps/app-types/custom-apps"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1 mt-2"
+            >
+              <span>Cum obțin Admin API Access Token?</span>
+              <FiExternalLink className="w-3 h-3" />
+            </a>
           </div>
 
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -453,8 +439,11 @@ function Connections() {
             <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
               <li>Accesează Shopify Admin → Settings → Apps and sales channels</li>
               <li>Develop apps → Create an app</li>
-              <li>Configurează Admin API scopes: read_products, write_products, read_inventory, write_inventory</li>
-              <li>Install app și copiază Client ID (API Key) și Client Secret (API Secret)</li>
+              <li>
+                Configurează Admin API scopes: read_products, write_products, read_inventory,
+                write_inventory
+              </li>
+              <li>Install app și copiază Admin API access token</li>
             </ol>
           </div>
 
@@ -474,7 +463,7 @@ function Connections() {
               type="submit"
               className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
             >
-              {editingIntegration ? "Salvează Modificările" : "Creează Integrare"}
+              Creează Integrare
             </button>
           </div>
         </form>

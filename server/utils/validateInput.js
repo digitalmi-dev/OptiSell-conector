@@ -7,12 +7,13 @@ export function validateIntegrationInput(body) {
     errors.push('storeDomain trebuie să conțină ".myshopify.com"');
   }
 
-  if (!body.clientId || typeof body.clientId !== "string" || !body.clientId.trim()) {
-    errors.push("clientId este obligatoriu și trebuie să fie un string");
-  }
-
-  if (!body.clientSecret || typeof body.clientSecret !== "string" || !body.clientSecret.trim()) {
-    errors.push("clientSecret este obligatoriu și trebuie să fie un string");
+  if (!body.adminApiAccessToken || typeof body.adminApiAccessToken !== "string" || !body.adminApiAccessToken.trim()) {
+    errors.push("adminApiAccessToken este obligatoriu și trebuie să fie un string");
+  } else {
+    const cleanToken = body.adminApiAccessToken.trim();
+    if (!cleanToken.startsWith("shpat_") && !cleanToken.startsWith("shpca_")) {
+      errors.push('adminApiAccessToken trebuie să înceapă cu "shpat_" sau "shpca_"');
+    }
   }
 
   if (body.integrationName && typeof body.integrationName !== "string") {

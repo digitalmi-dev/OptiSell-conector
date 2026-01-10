@@ -7,90 +7,103 @@ import { dirname } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const STORAGE_DIR = __dirname;
-const INTEGRATIONS_FILE = path.join(STORAGE_DIR, "integrations.json");
+const STORAGE_DIR = path.join(__dirname, "..", "storage");
+const SHOPIFY_FILE = path.join(STORAGE_DIR, "shopify.json");
 
 if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
 }
 
-if (!fs.existsSync(INTEGRATIONS_FILE)) {
-  fs.writeFileSync(INTEGRATIONS_FILE, JSON.stringify([], null, 2), "utf8");
+if (!fs.existsSync(SHOPIFY_FILE)) {
+  fs.writeFileSync(SHOPIFY_FILE, JSON.stringify({ integrations: [] }, null, 2), "utf8");
 }
 
-function readIntegrations() {
+function readShopifyData() {
   try {
-    const data = fs.readFileSync(INTEGRATIONS_FILE, "utf8");
+    const data = fs.readFileSync(SHOPIFY_FILE, "utf8");
     return JSON.parse(data);
   } catch (error) {
-    console.error("Error reading integrations:", error);
-    return [];
+    console.error("Error reading shopify.json:", error);
+    return { integrations: [] };
   }
 }
 
-function writeIntegrations(integrations) {
+function writeShopifyData(data) {
   try {
-    fs.writeFileSync(INTEGRATIONS_FILE, JSON.stringify(integrations, null, 2), "utf8");
+    fs.writeFileSync(SHOPIFY_FILE, JSON.stringify(data, null, 2), "utf8");
     return true;
   } catch (error) {
-    console.error("Error writing integrations:", error);
+    console.error("Error writing shopify.json:", error);
     return false;
   }
 }
 
 export function listIntegrations() {
-  return readIntegrations();
+  const data = readShopifyData();
+  return data.integrations || [];
 }
 
 export function addIntegration(integrationData) {
-  const integrations = readIntegrations();
+  const data = readShopifyData();
+  
+  if (!data.integrations) {
+    data.integrations = [];
+  }
 
   const newIntegration = {
     id: randomUUID(),
     integrationName: integrationData.integrationName || integrationData.storeDomain,
     storeDomain: integrationData.storeDomain.trim(),
-    clientId: integrationData.clientId.trim(),
-    clientSecret: integrationData.clientSecret.trim(),
-    accessToken: integrationData.accessToken,
-    tokenExpiresAt: integrationData.tokenExpiresAt,
-    scope: integrationData.scope || "",
+    adminApiAccessToken: integrationData.adminApiAccessToken.trim(),
     status: integrationData.status || "disconnected",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
-  integrations.push(newIntegration);
-  writeIntegrations(integrations);
+  data.integrations.push(newIntegration);
+  writeShopifyData(data);
 
   return newIntegration;
 }
 
 export function findIntegrationById(id) {
-  const integrations = readIntegrations();
-  return integrations.find((integration) => integration.id === id) || null;
+  const data = readShopifyData();
+  return (data.integrations || []).find((integration) => integration.id === id) || null;
+}
+
+export function deleteIntegration(id) {
+  const data = readShopifyData();
+  
+  if (!data.integrations) {
+    data.integrations = [];
+  }
+
+  const filtered = data.integrations.filter((integration) => integration.id !== id);
+  data.integrations = filtered;
+  
+  const success = writeShopifyData(data);
+  return success && filtered.length < data.integrations.length;
 }
 
 export function updateIntegration(id, updates) {
-  const integrations = readIntegrations();
-  const index = integrations.findIndex((integration) => integration.id === id);
+  const data = readShopifyData();
+  
+  if (!data.integrations) {
+    data.integrations = [];
+  }
+
+  const index = data.integrations.findIndex((integration) => integration.id === id);
 
   if (index === -1) {
     return null;
   }
 
-  integrations[index] = {
-    ...integrations[index],
+  data.integrations[index] = {
+    ...data.integrations[index],
     ...updates,
     updatedAt: new Date().toISOString(),
   };
 
-  writeIntegrations(integrations);
-  return integrations[index];
-}
-
-export function deleteIntegration(id) {
-  const integrations = readIntegrations();
-  const filtered = integrations.filter((integration) => integration.id !== id);
-  writeIntegrations(filtered);
-  return filtered.length < integrations.length;
+  writeShopifyData(data);
+  return data.integrations[index];
 }

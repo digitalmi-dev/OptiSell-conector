@@ -1,8 +1,8 @@
 const SHOPIFY_API_VERSION = "2024-01";
 
-export function createShopifyClient({ storeDomain, accessToken }) {
-  if (!storeDomain || !accessToken) {
-    throw new Error("storeDomain și accessToken sunt obligatorii");
+export function createShopifyClient({ storeDomain, adminApiAccessToken }) {
+  if (!storeDomain || !adminApiAccessToken) {
+    throw new Error("storeDomain și adminApiAccessToken sunt obligatorii");
   }
 
   let normalizedDomain = storeDomain.trim();
@@ -19,10 +19,16 @@ export function createShopifyClient({ storeDomain, accessToken }) {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "X-Shopify-Access-Token": accessToken,
+        "X-Shopify-Access-Token": adminApiAccessToken,
         "Content-Type": "application/json",
       },
     });
+
+    if (response.status === 401) {
+      const error = new Error("Token invalid sau expirat");
+      error.status = 401;
+      throw error;
+    }
 
     if (!response.ok) {
       let errorMessage = `Shopify API Error: ${response.status} ${response.statusText}`;
