@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 
@@ -45,11 +46,15 @@ export function addIntegration(integrationData) {
   const integrations = readIntegrations();
 
   const newIntegration = {
-    id: Date.now().toString(),
-    integrationName: integrationData.integrationName || `Shopify - ${integrationData.storeDomain}`,
+    id: randomUUID(),
+    integrationName: integrationData.integrationName || integrationData.storeDomain,
     storeDomain: integrationData.storeDomain.trim(),
-    adminAccessToken: integrationData.adminAccessToken.trim(),
-    status: "disconnected",
+    clientId: integrationData.clientId.trim(),
+    clientSecret: integrationData.clientSecret.trim(),
+    accessToken: integrationData.accessToken,
+    tokenExpiresAt: integrationData.tokenExpiresAt,
+    scope: integrationData.scope || "",
+    status: integrationData.status || "disconnected",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

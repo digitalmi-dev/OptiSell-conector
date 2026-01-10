@@ -67,7 +67,8 @@ export const shopifyAPI = {
    * @param {object} payload - Datele integrării
    * @param {string} payload.integrationName - Numele integrării (opțional)
    * @param {string} payload.storeDomain - Domeniul magazinului (ex: "nume-magazin.myshopify.com")
-   * @param {string} payload.adminAccessToken - Admin API Access Token (shpat_... sau shpca_...)
+   * @param {string} payload.clientId - Client ID (API Key) de la Custom App
+   * @param {string} payload.clientSecret - Client Secret (API Secret) de la Custom App
    * @returns {Promise<object>} Integrarea creată
    */
   createShopifyIntegration: (payload) =>

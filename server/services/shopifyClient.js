@@ -1,8 +1,8 @@
 const SHOPIFY_API_VERSION = "2024-01";
 
-export function createShopifyClient({ storeDomain, adminAccessToken }) {
-  if (!storeDomain || !adminAccessToken) {
-    throw new Error("storeDomain și adminAccessToken sunt obligatorii");
+export function createShopifyClient({ storeDomain, accessToken }) {
+  if (!storeDomain || !accessToken) {
+    throw new Error("storeDomain și accessToken sunt obligatorii");
   }
 
   let normalizedDomain = storeDomain.trim();
@@ -19,7 +19,7 @@ export function createShopifyClient({ storeDomain, adminAccessToken }) {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        "X-Shopify-Access-Token": adminAccessToken,
+        "X-Shopify-Access-Token": accessToken,
         "Content-Type": "application/json",
       },
     });

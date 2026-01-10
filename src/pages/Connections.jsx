@@ -24,7 +24,8 @@ function Connections() {
   const [formData, setFormData] = useState({
     integrationName: "",
     storeDomain: "",
-    adminAccessToken: "",
+    clientId: "",
+    clientSecret: "",
   });
 
   useEffect(() => {
@@ -51,7 +52,8 @@ function Connections() {
     setFormData({
       integrationName: "",
       storeDomain: "",
-      adminAccessToken: "",
+      clientId: "",
+      clientSecret: "",
     });
     setTestResult(null);
     setIsModalOpen(true);
@@ -62,7 +64,8 @@ function Connections() {
     setFormData({
       integrationName: integration.integrationName || "",
       storeDomain: integration.storeDomain || "",
-      adminAccessToken: "", // Nu afișăm token-ul existent pentru securitate
+      clientId: "",
+      clientSecret: "",
     });
     setTestResult(null);
     setIsModalOpen(true);
@@ -71,7 +74,6 @@ function Connections() {
   const handleSaveIntegration = async (e) => {
     e.preventDefault();
 
-    // Validare storeDomain
     if (!formData.storeDomain || !formData.storeDomain.trim()) {
       alert("Store Domain este obligatoriu!");
       return;
@@ -85,40 +87,28 @@ function Connections() {
       return;
     }
 
-    // Validare adminAccessToken
-    if (!formData.adminAccessToken || !formData.adminAccessToken.trim()) {
-      alert("Admin API Access Token este obligatoriu!");
+    if (!formData.clientId || !formData.clientId.trim()) {
+      alert("Client ID este obligatoriu!");
       return;
     }
 
-    const cleanToken = formData.adminAccessToken.trim().replace(/\s+/g, "");
-    if (!cleanToken.startsWith("shpat_") && !cleanToken.startsWith("shpca_")) {
-      let tokenType = "necunoscut";
-      if (cleanToken.startsWith("shpss_")) {
-        tokenType = "Storefront API Access Token";
-      } else if (cleanToken.startsWith("shpcn_")) {
-        tokenType = "Custom App Storefront API Access Token";
-      }
-
-      const errorMessage = `❌ Token Invalid!\n\nToken-ul introdus este de tip "${tokenType}" (începe cu "${cleanToken.substring(0, 5)}_").\n\nTrebuie să folosești Admin API Access Token care începe cu:\n• "shpat_" (Private App)\n• "shpca_" (Custom App Admin API)\n\nToken-ul actual: ${cleanToken.substring(0, 15)}...\n\nCum să obții token-ul corect:\n1. Shopify Admin → Settings → Apps and sales channels\n2. Develop apps → [App-ul tău]\n3. Admin API integration → Copiază "Admin API access token"\n4. NU copia "Storefront API access token"`;
-
-      alert(errorMessage);
+    if (!formData.clientSecret || !formData.clientSecret.trim()) {
+      alert("Client Secret este obligatoriu!");
       return;
     }
 
     try {
       const payload = {
         storeDomain: cleanDomain,
-        adminAccessToken: cleanToken,
+        clientId: formData.clientId.trim(),
+        clientSecret: formData.clientSecret.trim(),
       };
 
-      // Adaugă integrationName doar dacă este completat
       if (formData.integrationName && formData.integrationName.trim()) {
         payload.integrationName = formData.integrationName.trim();
       }
 
       if (editingIntegration) {
-        // Actualizează integrare existentă
         const response = await shopifyAPI.updateShopifyIntegration(editingIntegration.id, payload);
 
         if (response.success) {
@@ -127,7 +117,6 @@ function Connections() {
           loadIntegrations();
         }
       } else {
-        // Creează integrare nouă
         const response = await shopifyAPI.createShopifyIntegration(payload);
 
         if (response.success) {
@@ -155,7 +144,6 @@ function Connections() {
           message: response.message || "Conexiunea cu Shopify a reușit!",
           data: response.data,
         });
-        // Reîncarcă integrările pentru a actualiza status-ul
         loadIntegrations();
       } else {
         setTestResult({
@@ -347,7 +335,6 @@ function Connections() {
         </div>
       )}
 
-      {/* Modal pentru adăugare/editare integrare */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => {
@@ -411,44 +398,40 @@ function Connections() {
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              Admin API Access Token <span className="text-red-500">*</span>
+              Client ID <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.clientId}
+              onChange={(e) =>
+                setFormData({ ...formData, clientId: e.target.value })
+              }
+              placeholder="Client ID de la Custom App"
+              required
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Client ID (API Key) de la Custom App în Shopify
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Client Secret <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
-              value={formData.adminAccessToken}
+              value={formData.clientSecret}
               onChange={(e) =>
-                setFormData({ ...formData, adminAccessToken: e.target.value })
+                setFormData({ ...formData, clientSecret: e.target.value })
               }
-              placeholder="shpat_xxxxxxxxxxxxxxxxxxxxx"
+              placeholder="Client Secret de la Custom App"
               required
-              className={`w-full px-2.5 py-1.5 text-sm border rounded focus:ring-1 focus:border-purple-500 ${
-                formData.adminAccessToken.trim() &&
-                !formData.adminAccessToken.trim().replace(/\s+/g, "").startsWith("shpat_") &&
-                !formData.adminAccessToken.trim().replace(/\s+/g, "").startsWith("shpca_")
-                  ? "border-red-300 bg-red-50 focus:ring-red-500"
-                  : "border-gray-300 focus:ring-purple-500"
-              }`}
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Admin API Access Token trebuie să înceapă cu <strong>shpat_</strong> (Private App) sau{" "}
-              <strong>shpca_</strong> (Custom App Admin API)
+              Client Secret (API Secret) de la Custom App în Shopify
             </p>
-            {formData.adminAccessToken.trim() &&
-              !formData.adminAccessToken.trim().replace(/\s+/g, "").startsWith("shpat_") &&
-              !formData.adminAccessToken.trim().replace(/\s+/g, "").startsWith("shpca_") && (
-                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
-                  <p className="font-semibold mb-1">⚠️ Token invalid detectat!</p>
-                  <p>
-                    Token-ul introdus începe cu "
-                    {formData.adminAccessToken.trim().substring(0, 5)}_" care este de tip
-                    Storefront API.
-                  </p>
-                  <p className="mt-1">
-                    Trebuie să folosești <strong>Admin API Access Token</strong> care începe cu
-                    "shpat_" sau "shpca_".
-                  </p>
-                </div>
-              )}
             {!editingIntegration && (
               <a
                 href="https://help.shopify.com/en/manual/apps/app-types/custom-apps"
@@ -456,7 +439,7 @@ function Connections() {
                 rel="noopener noreferrer"
                 className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1 mt-2"
               >
-                <span>Cum obțin Admin API Access Token?</span>
+                <span>Cum obțin Client ID și Client Secret?</span>
                 <FiExternalLink className="w-3 h-3" />
               </a>
             )}
@@ -470,11 +453,8 @@ function Connections() {
             <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
               <li>Accesează Shopify Admin → Settings → Apps and sales channels</li>
               <li>Develop apps → Create an app</li>
-              <li>
-                Configurează Admin API scopes: read_products, write_products, read_inventory,
-                write_inventory
-              </li>
-              <li>Install app și copiază Admin API access token</li>
+              <li>Configurează Admin API scopes: read_products, write_products, read_inventory, write_inventory</li>
+              <li>Install app și copiază Client ID (API Key) și Client Secret (API Secret)</li>
             </ol>
           </div>
 
