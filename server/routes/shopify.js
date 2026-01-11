@@ -1,190 +1,220 @@
 import express from "express";
-import { validateIntegrationInput } from "../utils/validateInput.js";
-import { listIntegrations, addIntegration, findIntegrationById, deleteIntegration, updateIntegration } from "../storage/integrations.js";
+import { getShopifyCredentials } from "../services/shopifyClient.js";
+import { generateState, saveShopifyConfig, getShopifyConfig } from "../storage/integrations.js";
 import { createShopifyClient } from "../services/shopifyClient.js";
 
 const router = express.Router();
 
-router.get("/test", (req, res) => {
-  res.json({ status: "ok", message: "Shopify API endpoint is working" });
-});
+const SHOPIFY_STATES = new Map();
 
-router.get("/integrations", (req, res) => {
+router.get("/install", (req, res) => {
   try {
-    const integrations = listIntegrations();
+    const { shop } = req.query;
 
-    const safeIntegrations = integrations.map(({ adminApiAccessToken, ...rest }) => rest);
+    if (!shop || typeof shop !== "string" || !shop.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Parametrul 'shop' este obligatoriu. Exemplu: ?shop=nume-magazin.myshopify.com",
+      });
+    }
 
-    res.json({
-      success: true,
-      data: safeIntegrations,
-    });
+    let shopDomain = shop.trim();
+    if (!shopDomain.includes(".myshopify.com")) {
+      shopDomain = `${shopDomain}.myshopify.com`;
+    }
+    shopDomain = shopDomain.replace(/^https?:\/\//, "");
+
+    const credentials = getShopifyCredentials();
+
+    if (!credentials.clientId) {
+      return res.status(500).json({
+        success: false,
+        message: "SHOPIFY_CLIENT_ID nu este configurat în variabilele de mediu",
+      });
+    }
+
+    const state = generateState();
+    SHOPIFY_STATES.set(state, shopDomain);
+
+    const redirectUri = credentials.redirectUri;
+    const scopes = credentials.scopes;
+
+    const authUrl = `https://${shopDomain}/admin/oauth/authorize?` +
+      `client_id=${encodeURIComponent(credentials.clientId)}&` +
+      `scope=${encodeURIComponent(scopes)}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `state=${state}&` +
+      `grant_options[]=per-user`;
+
+    res.redirect(authUrl);
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message || "Eroare la încărcarea integrărilor",
+      message: error.message || "Eroare la instalarea Shopify",
     });
   }
 });
 
-router.post("/integrations/add", async (req, res) => {
+router.get("/callback", async (req, res) => {
   try {
-    const validation = validateIntegrationInput(req.body);
+    const { code, state, shop } = req.query;
 
-    if (!validation.valid) {
+    if (!code || !state || !shop) {
       return res.status(400).json({
         success: false,
-        message: "Date invalide",
-        errors: validation.errors,
+        message: "Parametrii code, state și shop sunt obligatorii",
       });
     }
 
-    const { integrationName, storeDomain, adminApiAccessToken } = req.body;
-
-    let normalizedDomain = storeDomain.trim();
-    if (!normalizedDomain.includes(".myshopify.com")) {
+    const storedShopDomain = SHOPIFY_STATES.get(state);
+    if (!storedShopDomain) {
       return res.status(400).json({
         success: false,
-        message: 'storeDomain trebuie să conțină ".myshopify.com"',
-      });
-    }
-    normalizedDomain = normalizedDomain.replace(/^https?:\/\//, "");
-
-    const cleanToken = adminApiAccessToken.trim();
-    if (!cleanToken.startsWith("shpat_") && !cleanToken.startsWith("shpca_")) {
-      return res.status(400).json({
-        success: false,
-        message: 'adminApiAccessToken trebuie să înceapă cu "shpat_" sau "shpca_"',
+        message: "State invalid sau expirat",
       });
     }
 
-    const client = createShopifyClient({
-      storeDomain: normalizedDomain,
-      adminApiAccessToken: cleanToken,
+    let shopDomain = shop.trim();
+    if (!shopDomain.includes(".myshopify.com")) {
+      shopDomain = `${shopDomain}.myshopify.com`;
+    }
+    shopDomain = shopDomain.replace(/^https?:\/\//, "");
+
+    if (storedShopDomain !== shopDomain) {
+      return res.status(400).json({
+        success: false,
+        message: "Shop domain nu se potrivește cu state-ul salvat",
+      });
+    }
+
+    SHOPIFY_STATES.delete(state);
+
+    const credentials = getShopifyCredentials();
+
+    if (!credentials.clientId || !credentials.clientSecret) {
+      return res.status(500).json({
+        success: false,
+        message: "SHOPIFY_CLIENT_ID sau SHOPIFY_CLIENT_SECRET nu sunt configurate",
+      });
+    }
+
+    const tokenUrl = `https://${shopDomain}/admin/oauth/access_token`;
+
+    const tokenResponse = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
+        code: code,
+      }),
     });
 
-    let shop;
-    try {
-      shop = await client.testConnection();
-    } catch (error) {
-      if (error.status === 401) {
-        return res.status(401).json({
-          success: false,
-          message: "Token invalid sau expirat",
-          error: error.message,
-        });
+    if (!tokenResponse.ok) {
+      let errorMessage = `OAuth Error: ${tokenResponse.status} ${tokenResponse.statusText}`;
+      try {
+        const errorData = await tokenResponse.json();
+        if (errorData.error) {
+          errorMessage = errorData.error;
+        } else if (errorData.error_description) {
+          errorMessage = errorData.error_description;
+        }
+      } catch (e) {
+        const text = await tokenResponse.text();
+        errorMessage = text || errorMessage;
       }
 
       return res.status(400).json({
         success: false,
-        message: "Conexiunea cu Shopify a eșuat",
-        error: error.message,
-        status: error.status,
+        message: "Eroare la obținerea access token de la Shopify",
+        error: errorMessage,
       });
     }
 
-    const integration = addIntegration({
-      integrationName: integrationName?.trim() || undefined,
-      storeDomain: normalizedDomain,
-      adminApiAccessToken: cleanToken,
-      status: "connected",
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      return res.status(400).json({
+        success: false,
+        message: "Shopify nu a returnat access_token",
+      });
+    }
+
+    saveShopifyConfig({
+      access_token: tokenData.access_token,
+      scope: tokenData.scope || credentials.scopes,
     });
 
-    const { adminApiAccessToken: token, ...safeIntegration } = integration;
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const redirectUrl = `${frontendUrl}/connections?shopify_installed=true&shop=${encodeURIComponent(shopDomain)}`;
 
-    res.status(201).json({
+    res.redirect(redirectUrl);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Eroare la procesarea callback-ului Shopify",
+    });
+  }
+});
+
+router.get("/products", async (req, res) => {
+  try {
+    const { shop } = req.query;
+    const limit = parseInt(req.query.limit) || 5;
+
+    if (!shop) {
+      return res.status(400).json({
+        success: false,
+        message: "Parametrul 'shop' este obligatoriu",
+      });
+    }
+
+    let shopDomain = shop.trim();
+    if (!shopDomain.includes(".myshopify.com")) {
+      shopDomain = `${shopDomain}.myshopify.com`;
+    }
+    shopDomain = shopDomain.replace(/^https?:\/\//, "");
+
+    const client = createShopifyClient(shopDomain);
+    const products = await client.getProducts(limit);
+
+    res.json({
       success: true,
-      message: "Integrarea a fost creată cu succes",
+      data: products,
+      count: products.length,
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Eroare la obținerea produselor",
+    });
+  }
+});
+
+router.get("/status", (req, res) => {
+  try {
+    const config = getShopifyConfig();
+
+    res.json({
+      success: true,
       data: {
-        ...safeIntegration,
-        shop: shop,
+        installed: config.installed || false,
+        hasToken: !!config.access_token,
+        scope: config.scope || null,
       },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message || "Eroare la crearea integrării",
+      message: error.message || "Eroare la verificarea statusului",
     });
   }
 });
 
-router.delete("/integrations/:id", (req, res) => {
-  try {
-    const { id } = req.params;
-    const deleted = deleteIntegration(id);
-
-    if (!deleted) {
-      return res.status(404).json({
-        success: false,
-        message: "Integrarea nu a fost găsită",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Integrarea a fost ștearsă cu succes",
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Eroare la ștergerea integrării",
-    });
-  }
-});
-
-router.post("/integrations/:id/test", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const integration = findIntegrationById(id);
-
-    if (!integration) {
-      return res.status(404).json({
-        success: false,
-        message: "Integrarea nu a fost găsită",
-      });
-    }
-
-    const client = createShopifyClient({
-      storeDomain: integration.storeDomain,
-      adminApiAccessToken: integration.adminApiAccessToken,
-    });
-
-    try {
-      const shop = await client.testConnection();
-      updateIntegration(id, { status: "connected" });
-
-      res.json({
-        success: true,
-        message: "Conexiunea cu Shopify a reușit!",
-        data: {
-          shop,
-          integrationId: id,
-        },
-      });
-    } catch (error) {
-      updateIntegration(id, { status: "disconnected" });
-
-      if (error.status === 401) {
-        return res.status(401).json({
-          success: false,
-          message: "Token invalid sau expirat",
-          error: error.message,
-        });
-      }
-
-      res.status(error.status || 400).json({
-        success: false,
-        message: "Conexiunea cu Shopify a eșuat",
-        error: error.message,
-        status: error.status,
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Eroare la testarea conexiunii",
-    });
-  }
+router.get("/test", (req, res) => {
+  res.json({ status: "ok", message: "Shopify API endpoint is working" });
 });
 
 export default router;

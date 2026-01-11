@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,7 +15,7 @@ if (!fs.existsSync(STORAGE_DIR)) {
 }
 
 if (!fs.existsSync(SHOPIFY_FILE)) {
-  fs.writeFileSync(SHOPIFY_FILE, JSON.stringify({ integrations: [] }, null, 2), "utf8");
+  fs.writeFileSync(SHOPIFY_FILE, JSON.stringify({ shop: { access_token: null, scope: null, installed: false } }, null, 2), "utf8");
 }
 
 function readShopifyData() {
@@ -24,7 +24,7 @@ function readShopifyData() {
     return JSON.parse(data);
   } catch (error) {
     console.error("Error reading shopify.json:", error);
-    return { integrations: [] };
+    return { shop: { access_token: null, scope: null, installed: false } };
   }
 }
 
@@ -38,72 +38,21 @@ function writeShopifyData(data) {
   }
 }
 
-export function listIntegrations() {
+export function getShopifyConfig() {
   const data = readShopifyData();
-  return data.integrations || [];
+  return data.shop || { access_token: null, scope: null, installed: false };
 }
 
-export function addIntegration(integrationData) {
+export function saveShopifyConfig(config) {
   const data = readShopifyData();
-  
-  if (!data.integrations) {
-    data.integrations = [];
-  }
-
-  const newIntegration = {
-    id: randomUUID(),
-    integrationName: integrationData.integrationName || integrationData.storeDomain,
-    storeDomain: integrationData.storeDomain.trim(),
-    adminApiAccessToken: integrationData.adminApiAccessToken.trim(),
-    status: integrationData.status || "disconnected",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  data.shop = {
+    ...data.shop,
+    ...config,
+    installed: config.access_token ? true : false,
   };
-
-  data.integrations.push(newIntegration);
-  writeShopifyData(data);
-
-  return newIntegration;
+  return writeShopifyData(data);
 }
 
-export function findIntegrationById(id) {
-  const data = readShopifyData();
-  return (data.integrations || []).find((integration) => integration.id === id) || null;
-}
-
-export function deleteIntegration(id) {
-  const data = readShopifyData();
-  
-  if (!data.integrations) {
-    data.integrations = [];
-  }
-
-  const filtered = data.integrations.filter((integration) => integration.id !== id);
-  data.integrations = filtered;
-  
-  const success = writeShopifyData(data);
-  return success && filtered.length < data.integrations.length;
-}
-
-export function updateIntegration(id, updates) {
-  const data = readShopifyData();
-  
-  if (!data.integrations) {
-    data.integrations = [];
-  }
-
-  const index = data.integrations.findIndex((integration) => integration.id === id);
-
-  if (index === -1) {
-    return null;
-  }
-
-  data.integrations[index] = {
-    ...data.integrations[index],
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-
-  writeShopifyData(data);
-  return data.integrations[index];
+export function generateState() {
+  return crypto.randomBytes(16).toString("hex");
 }

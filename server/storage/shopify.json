@@ -1,3 +1,7 @@
 {
-  "integrations": []
+  "shop": {
+    "access_token": null,
+    "scope": null,
+    "installed": false
+  }
 }

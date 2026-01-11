@@ -42,22 +42,11 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 export const shopifyAPI = {
-  getShopifyIntegrations: () => apiRequest("/api/shopify/integrations", { method: "GET" }),
+  getShopifyStatus: () => apiRequest("/api/shopify/status", { method: "GET" }),
 
-  createShopifyIntegration: (payload) =>
-    apiRequest("/api/shopify/integrations/add", {
-      method: "POST",
-      body: payload,
-    }),
-
-  deleteShopifyIntegration: (id) =>
-    apiRequest(`/api/shopify/integrations/${id}`, {
-      method: "DELETE",
-    }),
-
-  testConnection: (id) =>
-    apiRequest(`/api/shopify/integrations/${id}/test`, {
-      method: "POST",
+  getShopifyProducts: (shop, limit = 5) =>
+    apiRequest(`/api/shopify/products?shop=${encodeURIComponent(shop)}&limit=${limit}`, {
+      method: "GET",
     }),
 };
 
